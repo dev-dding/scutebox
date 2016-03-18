@@ -1,6 +1,6 @@
 /*************************************************************************
  > File Name: server.c
- > Author: SongLee
+ > Author: David Ding
  ************************************************************************/
 
 #include <sys/types.h>
@@ -112,6 +112,7 @@ int main()
     int ret = -1;
     int count = -1;
     char buffer[1024];
+    char localip[50];
     fd_set readfd;
     struct sockaddr_in from_addr;
     socklen_t from_len = sizeof(struct sockaddr_in);
@@ -142,12 +143,11 @@ int main()
           exit(1);
      }
 
+	GetLocalIpAddress( localip );
+
      // waiting for data
      while(1)
      {
-        timeout.tv_sec = 100;
-        timeout.tv_usec = 0;
-
         // reset
         FD_ZERO(&readfd);
 
@@ -178,11 +178,10 @@ int main()
                             (char *)inet_ntoa(from_addr.sin_addr), ntohs(from_addr.sin_port), buffer );
 
                         // send data back to client
-                        GetLocalIpAddress( buffer );
-                        // strcpy( buffer, "192.168.0.110");
+                        // strcpy( localip, "192.168.0.110");
 						from_addr.sin_family = AF_INET;
 						from_addr.sin_port = htons(SERVER_PORT);
-                        count = sendto(sock, buffer, strlen(buffer), 0, (struct sockaddr*) &from_addr, from_len);
+                        count = sendto(sock, localip, strlen(localip), 0, (struct sockaddr*) &from_addr, from_len);
                     }
                 }
                 break;
