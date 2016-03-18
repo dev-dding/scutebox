@@ -41,13 +41,13 @@ int main(int argc,char **argv)
     //*********************************************************     
     // Create a socket for listening response from ScuteBox
     //*********************************************************      
-    int recvfd;  
+    int recvsock;  
     struct sockaddr_in addr_rcv;  
 
-    recvfd = socket(AF_INET, SOCK_DGRAM, 0);  
-    if(recvfd == -1){  
+    recvsock = socket(AF_INET, SOCK_DGRAM, 0);  
+    if(recvsock == -1){  
         printf("socket error:%s\n", strerror(errno));  
-        close( recvfd );
+        close( recvsock );
         close( sockfd );
         return -1;  
     }
@@ -55,17 +55,17 @@ int main(int argc,char **argv)
     addr_rcv.sin_family = AF_INET;  
     addr_rcv.sin_addr.s_addr = htonl(INADDR_ANY);  
     addr_rcv.sin_port = htons(PORT);       
-    int err = bind(recvfd, (struct sockaddr *)&addr_rcv, sizeof(addr_rcv));  
+    int err = bind(recvsock, (struct sockaddr *)&addr_rcv, sizeof(addr_rcv));  
     if(err==-1) {  
         printf("bind error:%s\n",strerror(errno));  
-        close( recvfd );
+        close( recvsock );
         close( sockfd );
         return -1;  
     }  
     //**************************************************************      
 
-    // sending 5 times, just in case
-    int cnt = 5;
+    // sending 2 times, just in case
+    int cnt = 2;
     while( cnt-- > 0)  
     {  
         // Sending encrypt message to SucteBox, here is dummy string 
@@ -74,31 +74,60 @@ int main(int argc,char **argv)
         n = sendto(sockfd, sendline, strlen( sendline ), 0, (struct sockaddr *)&addr_ser, addrlen);  
         if(n == -1) {  
             printf("sendto error:%s\n",strerror(errno));  
-            close( recvfd );
+            close( recvsock );
             close( sockfd );
             return -1;  
         }
     }  
           
     printf("Messagte Sent -> %s,   waiting for server...\n");
-    while( 1 )
-    {
-        n = recvfrom(recvfd, recvline, 200, 0, (struct sockaddr *)&addr_rcv, &addrlen);
-        if(n == -1) {
-            printf("recvfrom error:%s\n",strerror(errno));
-            break;
-        }
 
-        recvline[ n ] = '\0';
-        if ( strcmp(sendline, recvline) != 0 ){
-            printf("Message Received -> %s\n", recvline);  
-            break;
-        }else{
-            // printf("********** ignore echo ***********\n");  
+    fd_set readfd;
+    struct timeval timeout;
+    int ret;
+
+    timeout.tv_sec = 3;
+    timeout.tv_usec = 0;
+
+    int wait = 1;
+
+    while( wait )
+    {
+        // reset
+        FD_ZERO(&readfd);
+
+        // set readfd to socket
+        FD_SET(recvsock, &readfd);
+
+        // select, detect any signs change
+        ret = select(recvsock + 1, &readfd, NULL, NULL, &timeout);
+        switch (ret)
+        {
+            case -1: // error
+                perror("select error:");
+                break;
+            case 0: // timeout
+                printf("select timeout\n");
+                wait = 0;
+                break;
+            default:
+                if (FD_ISSET(recvsock, &readfd))
+                {
+                    // receive data from client
+			        n = recvfrom(recvsock, recvline, 200, 0, (struct sockaddr *)&addr_rcv, &addrlen);
+           			recvline[ n ] = '\0';
+        			if ( strcmp(sendline, recvline) != 0 ){
+            			printf("Message Received -> %s\n", recvline);  
+            			break;
+			        }else{
+            			// printf("********** ignore echo ***********\n");  
+        			}
+                }
+                break;
         }
-    }
+	}
     
-    close( recvfd );
+    close( recvsock );
     close( sockfd );
       
     return 0;  
