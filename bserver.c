@@ -1,7 +1,9 @@
-/*************************************************************************
+/*****************************************************************************
  > File Name: server.c
+ > A UDP server listening to broadcast on port 45321, reply local IP address
  > Author: David Ding
- ************************************************************************/
+ > 2016.01.11
+ *****************************************************************************/
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -16,8 +18,9 @@
 #include <netdb.h>
 #include <stdarg.h>
 #include <string.h>
+#include <syslog.h>
 
-#define SERVER_PORT 6000
+#define SERVER_PORT 45321
 #define BUFFER_SIZE 1024
 #define FILE_NAME_MAX_SIZE 512
 
@@ -95,51 +98,81 @@ void GetLocalIpAddress( char *ipaddr )
     ipaddr[0] = '\0';
 
     if(getIfaceName(iface_name, sizeof(iface_name)) < 0) {
-        printf("get interface name error!\n");
+	syslog( LOG_ERR, "get interface name error" );
+        //printf("get interface name error!\n");
         return;
     }
 
     if(getIpAddress(iface_name, (char *) &intaddr, 15) < 0) {
-        printf("get interface ip address error!\n");
+	syslog( LOG_ERR, "get interface ip address error!" );
+        //printf("get interface ip address error!\n");
         return;
     }
     
     strcpy( ipaddr, (char *) &intaddr );
 }
 
-int main()
+int main ( int argc, char **argv )
 {
     int ret = -1;
     int count = -1;
     char buffer[1024];
     char localip[50];
+    char logmsg[256];
     fd_set readfd;
     struct sockaddr_in from_addr;
     socklen_t from_len = sizeof(struct sockaddr_in);
     struct timeval timeout;
+    uint16_t svport = SERVER_PORT;
 
     timeout.tv_sec = 2;
     timeout.tv_usec = 0;
+
+	openlog( "bserver", LOG_CONS | LOG_PID, LOG_USER );
+
+	int result, len, error;
+	if( argc == 2 ){
+		error = 0;
+		len = strlen( *(argv+1) );
+		int i=0;
+		result = 0;
+		for( i=0; i<len; i++ ){
+			if( isdigit(argv[1][i]) ) {
+				result = result * 10 + ( argv[1][i] - '0' );
+			}else{
+				error = 1;
+				break;
+			}
+		}
+		if ( error == 0 && result <= 65535 ){
+			svport = (uint16_t)result;
+		}
+	}
+
+	sprintf( logmsg, "UDP Server is listening on port: %d", svport );
+	syslog(LOG_INFO, logmsg);
 
      // define inetnet address
      struct sockaddr_in server_addr;
      bzero(&server_addr, sizeof(server_addr));
      server_addr.sin_family = AF_INET;
      server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-     server_addr.sin_port = htons(SERVER_PORT);
+     server_addr.sin_port = htons(svport);
 
      // create a socket
      int sock = socket(AF_INET, SOCK_DGRAM, 0);
      if(sock == -1)
      {
-          perror("Create Socket Failed:");
+          syslog(LOG_ERR, "Failed to create listening socket");
+          //perror("Create Socket Failed:");
           exit(1);
      }
 
      // bind socket with the address
      if(-1 == (bind(sock,(struct sockaddr*)&server_addr,sizeof(server_addr))))
      {
-          perror("Server Bind Failed:");
+          syslog(LOG_ERR, "Failed to bind listening socket");
+          //perror("Server Bind Failed:");
           exit(1);
      }
 
@@ -159,7 +192,8 @@ int main()
         switch (ret)
         {
             case -1: // error
-                perror("select error:");
+                syslog(LOG_ERR, "Socket select error");
+                //perror("select error:");
                 break;
             case 0: // timeout
                 // printf("select timeout\n");
@@ -174,14 +208,24 @@ int main()
                     // Verify password
                     //if ( Password is ok )
                     {
-                        printf("Client IP: %s, Port: %d, Data: %s\n",
+                        sprintf( logmsg, "Received from client IP: %s, Port: %d, Data: %s",
                             (char *)inet_ntoa(from_addr.sin_addr), ntohs(from_addr.sin_port), buffer );
+			syslog(LOG_INFO, logmsg);
 
                         // send data back to client
                         // strcpy( localip, "192.168.0.110");
-						from_addr.sin_family = AF_INET;
-						from_addr.sin_port = htons(SERVER_PORT);
+                        from_addr.sin_family = AF_INET;
+                        from_addr.sin_port = htons(svport);
                         count = sendto(sock, localip, strlen(localip), 0, (struct sockaddr*) &from_addr, from_len);
+			if( count > 0 ){
+				sprintf( logmsg, "Sent to client IP: %s, Port: %d, Data: %s",
+                            		(char *)inet_ntoa(from_addr.sin_addr), ntohs(from_addr.sin_port), localip );
+	                        syslog(LOG_INFO, logmsg);
+			}else{
+				sprintf( logmsg, "Failed to send to client IP: %s, Port: %d, Data: %s",
+                                        (char *)inet_ntoa(from_addr.sin_addr), ntohs(from_addr.sin_port), localip );
+				syslog(LOG_ERR, logmsg);
+			}
                     }
                 }
                 break;
@@ -189,5 +233,6 @@ int main()
      }
 
      close(sock);
+     closelog();
      return 0;
 }
