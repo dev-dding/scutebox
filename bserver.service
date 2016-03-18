@@ -1,0 +1,12 @@
+[Unit]
+Description=UDP Broadcasting Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/sbin/bserver
+Restart=on-abort
+
+[Install]
+WantedBy=multi-user.target
