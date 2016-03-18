@@ -98,13 +98,13 @@ void GetLocalIpAddress( char *ipaddr )
     ipaddr[0] = '\0';
 
     if(getIfaceName(iface_name, sizeof(iface_name)) < 0) {
-	syslog( LOG_ERR, "get interface name error" );
+    syslog( LOG_ERR, "get interface name error" );
         //printf("get interface name error!\n");
         return;
     }
 
     if(getIpAddress(iface_name, (char *) &intaddr, 15) < 0) {
-	syslog( LOG_ERR, "get interface ip address error!" );
+    syslog( LOG_ERR, "get interface ip address error!" );
         //printf("get interface ip address error!\n");
         return;
     }
@@ -112,12 +112,56 @@ void GetLocalIpAddress( char *ipaddr )
     strcpy( ipaddr, (char *) &intaddr );
 }
 
+int GetScuteId( char *sid )
+{
+    FILE* fd = NULL;
+    char buff[256];
+    char tmp[256];
+    char *pstr, *pstart, *pend;
+
+    *sid = 0x00;    // terminate the string
+
+    fd = fopen("/var/www/scute/config/config.php","r");
+
+    if(NULL == fd)
+    {
+        printf("fopen() Error!!!\n");
+        return -1;
+    }
+
+    while( NULL != fgets(buff, 255, fd) )
+    {
+        if( strstr(buff, "instanceid") != NULL ){
+            pstr = strstr(buff, "=>");
+            if( NULL != pstr ){
+                strcpy( tmp, pstr+2 );
+                pstart = strchr( tmp, '\'' );
+                if( pstart ){
+                    pend = strchr( pstart+1, '\'' );
+                    if( pend ){
+                        *pend = 0x00;
+                        strcpy( sid, pstart+1 );
+                        return 0;
+                    }
+                }                     
+            }
+            break;
+        }
+    }
+
+    fclose(fd);
+
+    return -1;
+}
+
+
 int main ( int argc, char **argv )
 {
     int ret = -1;
     int count = -1;
     char buffer[1024];
     char localip[50];
+    char scuteid[50];
     char logmsg[256];
     fd_set readfd;
     struct sockaddr_in from_addr;
@@ -128,59 +172,62 @@ int main ( int argc, char **argv )
     timeout.tv_sec = 2;
     timeout.tv_usec = 0;
 
-	openlog( "bserver", LOG_CONS | LOG_PID, LOG_USER );
+    openlog( "bserver", LOG_CONS | LOG_PID, LOG_USER );
 
-	int result, len, error;
-	if( argc == 2 ){
-		error = 0;
-		len = strlen( *(argv+1) );
-		int i=0;
-		result = 0;
-		for( i=0; i<len; i++ ){
-			if( isdigit(argv[1][i]) ) {
-				result = result * 10 + ( argv[1][i] - '0' );
-			}else{
-				error = 1;
-				break;
-			}
-		}
-		if ( error == 0 && result <= 65535 ){
-			svport = (uint16_t)result;
-		}
-	}
+    int result, len, error;
+    if( argc == 2 ){
+        error = 0;
+        len = strlen( *(argv+1) );
+        int i=0;
+        result = 0;
+        for( i=0; i<len; i++ ){
+            if( isdigit(argv[1][i]) ) {
+                result = result * 10 + ( argv[1][i] - '0' );
+            }else{
+                error = 1;
+                break;
+            }
+        }
+        if ( error == 0 && result <= 65535 ){
+            svport = (uint16_t)result;
+        }
+    }
 
-	sprintf( logmsg, "UDP Server is listening on port: %d", svport );
-	syslog(LOG_INFO, logmsg);
+    sprintf( logmsg, "UDP Server is listening on port: %d", svport );
+    syslog(LOG_INFO, logmsg);
 
-     // define inetnet address
-     struct sockaddr_in server_addr;
-     bzero(&server_addr, sizeof(server_addr));
-     server_addr.sin_family = AF_INET;
-     server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-     server_addr.sin_port = htons(svport);
+    // define inetnet address
+    struct sockaddr_in server_addr;
+    bzero(&server_addr, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    server_addr.sin_port = htons(svport);
 
-     // create a socket
-     int sock = socket(AF_INET, SOCK_DGRAM, 0);
-     if(sock == -1)
-     {
-          syslog(LOG_ERR, "Failed to create listening socket");
-          //perror("Create Socket Failed:");
-          exit(1);
-     }
+    // create a socket
+    int sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if(sock == -1)
+    {
+        syslog(LOG_ERR, "Failed to create listening socket");
+        //perror("Create Socket Failed:");
+        exit(1);
+    }
 
-     // bind socket with the address
-     if(-1 == (bind(sock,(struct sockaddr*)&server_addr,sizeof(server_addr))))
-     {
-          syslog(LOG_ERR, "Failed to bind listening socket");
-          //perror("Server Bind Failed:");
-          exit(1);
-     }
+    // bind socket with the address
+    if(-1 == (bind(sock,(struct sockaddr*)&server_addr,sizeof(server_addr))))
+    {
+        syslog(LOG_ERR, "Failed to bind listening socket");
+        //perror("Server Bind Failed:");
+        exit(1);
+    }
 
-	GetLocalIpAddress( localip );
+	// Get ScuteID and local ip address
+    GetScuteId( scuteid );
+    GetLocalIpAddress( localip );
 
      // waiting for data
-     while(1)
-     {
+    syslog(LOG_INFO, "while loop start");
+    while(1)
+    {
         // reset
         FD_ZERO(&readfd);
 
@@ -210,29 +257,36 @@ int main ( int argc, char **argv )
                     {
                         sprintf( logmsg, "Received from client IP: %s, Port: %d, Data: %s",
                             (char *)inet_ntoa(from_addr.sin_addr), ntohs(from_addr.sin_port), buffer );
-			syslog(LOG_INFO, logmsg);
+                        syslog(LOG_INFO, logmsg);
 
-                        // send data back to client
-                        // strcpy( localip, "192.168.0.110");
+                        // Making reply address, send data back to client
                         from_addr.sin_family = AF_INET;
                         from_addr.sin_port = htons(svport);
-                        count = sendto(sock, localip, strlen(localip), 0, (struct sockaddr*) &from_addr, from_len);
-			if( count > 0 ){
-				sprintf( logmsg, "Sent to client IP: %s, Port: %d, Data: %s",
-                            		(char *)inet_ntoa(from_addr.sin_addr), ntohs(from_addr.sin_port), localip );
-	                        syslog(LOG_INFO, logmsg);
-			}else{
-				sprintf( logmsg, "Failed to send to client IP: %s, Port: %d, Data: %s",
-                                        (char *)inet_ntoa(from_addr.sin_addr), ntohs(from_addr.sin_port), localip );
-				syslog(LOG_ERR, logmsg);
-			}
+
+                        // Making message for reply. The format is "<scuteid> <xxx.xxx.xxx.xxx>"
+                        sprintf( buffer, "<%s> <%s>", scuteid, localip );
+
+                        count = sendto(sock, buffer, strlen(buffer), 0, (struct sockaddr*) &from_addr, from_len);
+                        if( count > 0 ){
+                            sprintf( logmsg, "Sent to client IP: %s, Port: %d, Data: %s",
+                                (char *)inet_ntoa(from_addr.sin_addr), ntohs(from_addr.sin_port), localip );
+                            syslog(LOG_INFO, logmsg);
+                        }else{
+                            sprintf( logmsg, "Failed to send to client IP: %s, Port: %d, Data: %s",
+                                (char *)inet_ntoa(from_addr.sin_addr), ntohs(from_addr.sin_port), localip );
+                            syslog(LOG_ERR, logmsg);
+                        }
                     }
                 }
                 break;
         }
-     }
+    }
 
-     close(sock);
-     closelog();
-     return 0;
+    sprintf( logmsg, "Select status is: %d. While loop ends", ret );
+    syslog(LOG_INFO, logmsg);
+
+    close(sock);
+    closelog();
+
+    return 0;
 }
