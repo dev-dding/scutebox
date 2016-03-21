@@ -70,6 +70,8 @@ int main(int argc,char **argv)
     {  
         // Sending encrypt message to SucteBox, here is dummy string 
         strcpy(sendline, "Dummy string for getting SucteBox message");  
+        //strcpy(sendline, "oc7h33uam5kz");  
+        //strcpy(sendline, "ocopee0fc47e");  
           
         n = sendto(sockfd, sendline, strlen( sendline ), 0, (struct sockaddr *)&addr_ser, addrlen);  
         if(n == -1) {  
@@ -86,8 +88,8 @@ int main(int argc,char **argv)
     struct timeval timeout;
     int ret;
 
-    timeout.tv_sec = 3;
-    timeout.tv_usec = 0;
+    timeout.tv_sec = 0;
+    timeout.tv_usec = 500000;
 
     int wait = 1;
 
