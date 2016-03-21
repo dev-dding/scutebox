@@ -169,8 +169,8 @@ int main ( int argc, char **argv )
     struct timeval timeout;
     uint16_t svport = SERVER_PORT;
 
-    timeout.tv_sec = 2;
-    timeout.tv_usec = 0;
+    timeout.tv_sec = 0;
+    timeout.tv_usec = 100000;
 
     openlog( "bserver", LOG_CONS | LOG_PID, LOG_USER );
 
@@ -252,12 +252,13 @@ int main ( int argc, char **argv )
                     count = recvfrom(sock, buffer, 1024, 0, (struct sockaddr*)&from_addr, &from_len);
                     buffer[count] = 0x00;
 
-                    // Verify password
-                    //if ( Password is ok )
+                    // Verify scuteid, only reply when received id matches the current id
+                    int cmp = strcmp(scuteid, buffer);
+                    // if ( cmp == 0 )
                     {
-                        sprintf( logmsg, "Received from client IP: %s, Port: %d, Data: %s",
-                            (char *)inet_ntoa(from_addr.sin_addr), ntohs(from_addr.sin_port), buffer );
-                        syslog(LOG_INFO, logmsg);
+                        //sprintf( logmsg, "Received from client IP: %s, Port: %d, Data: %s",
+                        //    (char *)inet_ntoa(from_addr.sin_addr), ntohs(from_addr.sin_port), buffer );
+                        //syslog(LOG_INFO, logmsg);
 
                         // Making reply address, send data back to client
                         from_addr.sin_family = AF_INET;
@@ -268,18 +269,19 @@ int main ( int argc, char **argv )
 
                         count = sendto(sock, buffer, strlen(buffer), 0, (struct sockaddr*) &from_addr, from_len);
                         if( count > 0 ){
-                            sprintf( logmsg, "Sent to client IP: %s, Port: %d, Data: %s",
-                                (char *)inet_ntoa(from_addr.sin_addr), ntohs(from_addr.sin_port), localip );
+                            sprintf( logmsg, "Received query request. Sent back to %s:%d, Data: %s",
+                                (char *)inet_ntoa(from_addr.sin_addr), ntohs(from_addr.sin_port), buffer );
                             syslog(LOG_INFO, logmsg);
                         }else{
                             sprintf( logmsg, "Failed to send to client IP: %s, Port: %d, Data: %s",
-                                (char *)inet_ntoa(from_addr.sin_addr), ntohs(from_addr.sin_port), localip );
+                                (char *)inet_ntoa(from_addr.sin_addr), ntohs(from_addr.sin_port), buffer );
                             syslog(LOG_ERR, logmsg);
                         }
                     }
                 }
                 break;
         }
+        usleep(300000);
     }
 
     sprintf( logmsg, "Select status is: %d. While loop ends", ret );
