@@ -34,7 +34,7 @@ def GetScuteConfigData():
     fo = open("/tmp/getscutecfg.php", "wb")
     fo.write("<?php\n")
     fo.write("include \'/var/www/scute/config/config.php\';\n")
-    fo.write("echo \'{\"scuteid\":\"\' . $CONFIG[\'scuteid\'] . \'\", \"port\":\"\' . $CONFIG[\'port\'] . \'\"}\';\n")
+    fo.write("echo \'{\"scuteid\":\"\' . $CONFIG[\'instanceid\'] . \'\"}\';\n")
     fo.write("?>\n")
     fo.close()
     p = subprocess.Popen(["php /tmp/getscutecfg.php"], shell=True, stdout=subprocess.PIPE)
@@ -85,10 +85,10 @@ if newline != oldline :
     # reading scuteID and scutebox port forwarding from scutebox config file
     str = GetScuteConfigData()
     cfg_data = json.loads( str )
-    port = cfg_data['port']
+    port = "14443"  # cfg_data['port']
     scuteid = cfg_data['scuteid']
     if not port:
-        port = "14432"
+        port = "14443"
         # log.info('There is no valid port number in config file')
         # quit()
     if not scuteid:
