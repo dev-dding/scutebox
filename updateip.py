@@ -10,7 +10,8 @@ import json
 import socket
 
 key = "scutekey_001"
-oldip = "/tmp/scute_global_ip"
+old_global_ip_file = "/tmp/scute_global_ip"
+old_local_ip_file = "/tmp/scute_local_ip"
 gs_url = "https://64.140.118.221:3443/updatescuteip.php"
 
 # from http://commandline.org.uk/python/how-to-find-out-ip-address-in-python/
@@ -64,24 +65,63 @@ if not validateip( newline ) :
     log.info('Cannot get valid Internet IP address')
     quit()
 
-# Get IP address from previous data which is saved to ipaddr.old
+# Get global IP address from previous data which is saved to old_global_ip_file
 oldline = ""
-if not os.path.isfile(oldip) :
-    log.info('Previous IP file not existing')
-    # print "Previous IP file not existing"
-    # os.system("touch %s" % oldip)
+if not os.path.isfile(old_global_ip_file) :
+    log.info('Previous global IP file not existing')
+    # print "Previous global IP file not existing"
+    # os.system("touch %s" % old_global_ip_file)
 else :
     try :
-        f_old = open(oldip,'r')
+        f_old = open(old_global_ip_file,'r')
         oldline = f_old.readline()
         f_old.close()
         oldline = oldline.strip('\n')   # remove the line end
         oldline = oldline.strip('\r')
     except :
-	    log.critical('File access error -> ipaddr.old')
+        log.critical('File access error -> ipaddr.old')
         # print "File access error -> ipaddr.old"
 
+# Get local IP address from previous data which is saved to old_local_ip_file
+oldlocalip = ""
+if not os.path.isfile(old_local_ip_file) :
+    log.info('Previous local IP file not existing')
+    # print "Previous local IP file not existing"
+    # os.system("touch %s" % old_local_ip_file)
+else :
+    try :
+        f_old = open(old_local_ip_file,'r')
+        oldlocalip = f_old.readline()
+        f_old.close()
+        oldlocalip = oldlocalip.strip('\n')   # remove the line end
+        oldlocalip = oldlocalip.strip('\r')
+    except :
+        log.critical('File access error -> ipaddr.old')
+        # print "File access error -> ipaddr.old"
+
+############################################################################
+# get local network ip address
+# add trusted domain if localip has been changed
+############################################################################
+localip = getLocalNetworkIp()
+if localip != oldlocalip :
+    # Add trust domain when internal or external ip change
+    os.system("sudo -u apache /var/www/scute/occ cicer:domains --clear --add %s" % newline)
+    os.system("sudo -u apache /var/www/scute/occ cicer:domains --add %s" % localip)
+    log.info('Added trust domain due to local ip change')
+    # update local ip file
+    cmd = 'echo ' + localip + ' > ' + old_local_ip_file
+    os.system( cmd )
+else :
+   print "Internal IP no change"
+
+
 if newline != oldline :
+    # Add trust domain when internal or external ip change
+    os.system("sudo -u apache /var/www/scute/occ cicer:domains --clear --add %s" % newline)
+    os.system("sudo -u apache /var/www/scute/occ cicer:domains --add %s" % localip)
+    log.info('Added trust domain due to external ip change')
+
     # reading scuteID and scutebox port forwarding from scutebox config file
     str = GetScuteConfigData()
     cfg_data = json.loads( str )
@@ -97,7 +137,7 @@ if newline != oldline :
         # quit()
     #
     # get local network ip address
-    localip = getLocalNetworkIp()
+    # localip = getLocalNetworkIp()
     #
     # making URL for updating IP to global server
     url_update = gs_url + '?ip=' + newline + '&scuteid=' + scuteid + '&key=' + key + '&port=' + port + '&localip=' + localip
@@ -112,13 +152,12 @@ if newline != oldline :
     if res_data['result'] == "true" :
         # print "result: " + res_data['result']
         # print "status: " + res_data['status']
-        cmd = 'echo ' + newline + ' > ' + oldip
+        cmd = 'echo ' + newline + ' > ' + old_global_ip_file
         os.system( cmd )
     	log.info( 'updated IP to global server successfully' )
     else :
     	log.error('failed to update IP to global server, ' + res_data['status'])
 else :
     # log.info('IP Address no change')
-    print "IP Address no change"
-    
+    print "External IP Address no change"
 
