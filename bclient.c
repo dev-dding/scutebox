@@ -15,14 +15,30 @@
 #include <errno.h>    
 
 #define PORT 45321  
+#define DEBUG_SID "b0x5cut3id"
 
 int main(int argc,char **argv)  
 {  
     int sockfd;  
     int addrlen, slen, n;  
     struct sockaddr_in addr_ser;  
-    char recvline[200], sendline[200];  
+    char recvline[200], sendline[200];
+    char strsendmsg[100];  
       
+    if( argc == 2 ){
+        int cmp = strcmp( argv[1], "--DEBUG" );
+        if ( cmp == 0 ){
+            strcpy(strsendmsg, DEBUG_SID);
+        }else{
+            strcpy(strsendmsg, argv[1]);
+        }
+    }else{
+        printf("Usage:\n");
+        printf("bclient <scuteid>\n");
+        printf("bclient --DEBUG\n");
+        return 0;
+    }
+
     sockfd = socket(AF_INET, SOCK_DGRAM, 0);  
     if(sockfd == -1) {  
         printf("socket error:%s\n", strerror(errno));  
@@ -69,7 +85,7 @@ int main(int argc,char **argv)
     while( cnt-- > 0)  
     {  
         // Sending encrypt message to SucteBox, here is dummy string 
-        strcpy(sendline, "Dummy string for getting SucteBox message");  
+        strcpy(sendline, strsendmsg);  
         //strcpy(sendline, "oc7h33uam5kz");  
         //strcpy(sendline, "ocopee0fc47e");  
           
@@ -88,7 +104,7 @@ int main(int argc,char **argv)
     struct timeval timeout;
     int ret;
 
-    timeout.tv_sec = 0;
+    timeout.tv_sec = 2;
     timeout.tv_usec = 500000;
 
     int wait = 1;
