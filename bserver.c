@@ -23,6 +23,7 @@
 #define SERVER_PORT 45321
 #define BUFFER_SIZE 1024
 #define FILE_NAME_MAX_SIZE 512
+#define DEBUG_SID "b0x5cut3id"
 
 static int getIfaceName(char *iface_name, int len)
 {
@@ -253,8 +254,11 @@ int main ( int argc, char **argv )
                     buffer[count] = 0x00;
 
                     // Verify scuteid, only reply when received id matches the current id
-                    int cmp = strcmp(scuteid, buffer);
-                    // if ( cmp == 0 )
+                    int cmp1 = strcmp(scuteid, buffer);
+                    int cmp2 = strcmp(DEBUG_SID, buffer);  // this is a backdoor for debugging
+                    printf("got message: %s, from: %s, result: %d, %d\n", buffer,  (char *)inet_ntoa(from_addr.sin_addr), cmp1, cmp2);
+                    if ( (cmp1 == 0) || (cmp2 == 0) )
+                    //if ( (cmp1 == 0) )
                     {
                         //sprintf( logmsg, "Received from client IP: %s, Port: %d, Data: %s",
                         //    (char *)inet_ntoa(from_addr.sin_addr), ntohs(from_addr.sin_port), buffer );
