@@ -171,7 +171,7 @@ int main ( int argc, char **argv )
     uint16_t svport = SERVER_PORT;
 
     timeout.tv_sec = 0;
-    timeout.tv_usec = 100000;
+    timeout.tv_usec = 20000;
 
     openlog( "bserver", LOG_CONS | LOG_PID, LOG_USER );
 
@@ -221,12 +221,13 @@ int main ( int argc, char **argv )
         exit(1);
     }
 
-	// Get ScuteID and local ip address
+    // Get ScuteID and local ip address
     GetScuteId( scuteid );
     GetLocalIpAddress( localip );
 
-     // waiting for data
+    // waiting for data
     syslog(LOG_INFO, "while loop start");
+    int counter = 0;
     while(1)
     {
         // reset
@@ -235,6 +236,13 @@ int main ( int argc, char **argv )
         // set readfd to socket
         FD_SET(sock, &readfd);
 
+        // update local IP every 5 seconds
+        counter++;
+        if ( counter > 100 ){
+            counter = 0;  // reset counter
+            GetLocalIpAddress( localip );
+        }
+    
         // select, detect any signs change
         ret = select(sock + 1, &readfd, NULL, NULL, &timeout);
         switch (ret)
@@ -285,7 +293,7 @@ int main ( int argc, char **argv )
                 }
                 break;
         }
-        usleep(300000);
+        usleep(20000);
     }
 
     sprintf( logmsg, "Select status is: %d. While loop ends", ret );
