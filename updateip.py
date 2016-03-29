@@ -12,7 +12,7 @@ import socket
 key = "scutekey_001"
 old_global_ip_file = "/tmp/scute_global_ip"
 old_local_ip_file = "/tmp/scute_local_ip"
-gs_url = "https://64.140.118.221:3443/updatescuteip.php"
+gs_url = "https://gs1.scuteworld.com:3443/updatescuteip.php"
 
 def getLocalNetworkIp():
     # s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
