@@ -19,7 +19,7 @@ Install broadcast server and UP updater script.
 
 
 Install will do the followings:
-1. Copy file "bserver" to /usr/sbin/
+1. Copy file "bserver" to /usr/local/bin/
 2. Copy file "bserver.service" to /etc/systemd/system/
 3. Start bserver service and set it to autorun on boot
    $ sudo systemctl start bserver.service
