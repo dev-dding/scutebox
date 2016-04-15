@@ -18,6 +18,7 @@
 #include <netdb.h>
 #include <stdarg.h>
 #include <string.h>
+#include <ctype.h>
 #include <syslog.h>
 
 #define SERVER_PORT 45321
