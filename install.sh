@@ -1,4 +1,5 @@
 #!/bin/bash
+cd "$(dirname "$0")"
 
 ROOT_UID=0     # Only users with $UID 0 have root privileges.
 E_NOTROOT=87   # Non-root exit error.
@@ -41,7 +42,10 @@ firewall-cmd --reload
 # Add scheduled task every minute to update scute IP address
 # task is saved to scutecron file
 echo "Adding updateip to crontab"
-crontab scute.cron
+crontab -l | sed 'updateip.py/d' > /tmp/cron.tmp
+cat scute.cron >> /tmp/cron.tmp
+crontab /tmp/cron.tmp
+rm -rf /tmp/cron.tmp
 
 exit 0
 
