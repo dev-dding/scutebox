@@ -1,4 +1,5 @@
 #!/usr/bin/env python  
+# please choose encoding type, ascii or UTF-8  
 # -*- coding:UTF-8 -*-  
 
 import os
@@ -10,24 +11,27 @@ import json
 import socket
 
 key = "scutekey_001"
-old_global_ip_file = "/tmp/scute_global_ip"
-old_local_ip_file = "/tmp/scute_local_ip"
+uploadGsGood = "/tmp/scute_gs_success"
 gs_url = "https://gs1.scuteworld.com:3443/updatescuteip.php"
+localip_inet = ""
+scute_id = ""
+scute_port = ""
+trusted_sites = []
+
+def logMessages( str ):
+    log.info( str )
+    print str
 
 def getLocalNetworkIp():
-    # s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    # s.connect(("yahoo.com",80))
-    # str = s.getsockname()[0]
-    # s.close()
-
     # Get IP address from "ip addr" command
-    str = "ip addr | grep 'state UP' -A2 | grep inet | awk '{print $2}' | cut -f1 -d'/'"
-    p = subprocess.Popen([str], shell=True, stdout=subprocess.PIPE)
-    str = p.stdout.read()
-
+    str = '/usr/sbin/ip addr | grep \'state UP\' -A2 | grep inet | awk \'{print $2}\' | cut -f1 -d\'/\''
+    # str = 'cat ipaddr | grep \'state UP\' -A2 | grep inet | awk \'{print $2}\' | cut -f1 -d\'/\''
+    p = subprocess.Popen(str, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
+    str = p.stdout.read().splitlines()
     return str
 
-def validateip( ip ):
+
+def validateIp( ip ):
     try:
         parts = ip.split('.')
         return len(parts) == 4 and all(0 <= int(part) < 256 for part in parts)
@@ -36,20 +40,29 @@ def validateip( ip ):
     except (AttributeError, TypeError):
         return False # `ip` isn't even a string
 
-def GetScuteConfigData():
+def getScuteConfigData():
     fo = open("/tmp/getscutecfg.php", "wb")
     fo.write("<?php\n")
     fo.write("include \'/var/www/scute/config/config.php\';\n")
-    fo.write("echo \'{\"scuteid\":\"\' . $CONFIG[\'instanceid\'] . \'\"}\';\n")
+    fo.write("$len = count($CONFIG[\'trusted_domains\']);\n")
+    fo.write("$str = \'[\"\';\n")
+    fo.write("for($x = 0; $x < $len; $x++) {\n")
+    fo.write("    $str .= $CONFIG[\'trusted_domains\'][$x];\n")
+    fo.write("    if ( $x < $len-1 ){\n")
+    fo.write("        $str .= \'\", \"\';\n")
+    fo.write("    }else{\n")
+    fo.write("        $str .= \'\"]\';\n")
+    fo.write("    }\n")
+    fo.write("}\n")
+    fo.write("echo \'{\"scuteid\":\"\' . $CONFIG[\'instanceid\'] . \'\", \"trustedsites\":\' . $str . \'}\';\n")
     fo.write("?>\n")
     fo.close()
     p = subprocess.Popen(["php /tmp/getscutecfg.php"], shell=True, stdout=subprocess.PIPE)
     ret = p.stdout.read()
     return ret
 
-
 # get the router internet ip address by running wget command
-def GetGlobalIP():
+def getGlobalIp():
     # os.system('wget -qO- http://ipecho.net/plain > ipaddr.txt')
     str = "wget -qO- --tries=2 --timeout=2 http://ipecho.net/plain"
     p = subprocess.Popen([str], shell=True, stdout=subprocess.PIPE)
@@ -64,141 +77,110 @@ handler = logging.handlers.SysLogHandler(address = '/dev/log')
 formatter = logging.Formatter('%(module)s: %(message)s')
 handler.setFormatter(formatter)
 log.addHandler(handler)
+logMessages( "===============  UpdateIP.py Start ===============" )
 
 # get and validate the router internet ip address
-new_ext_ip = GetGlobalIP()
-if not validateip( new_ext_ip ) :
-    print "*** ERROR ***  Cannot get valid Internet IP address"
-    log.info('Cannot get valid Internet IP address')
+new_ext_ip = getGlobalIp()
+if not validateIp( new_ext_ip ) :
+    logMessages('*** ERROR *** Cannot get valid Internet IP address')
     new_ext_ip = ""
-    # Remove the old file if Internet is not connected
-    if os.path.isfile(old_global_ip_file) :
-        os.remove(old_global_ip_file)
-    # quit()
-
-
-# Get global IP address from previous data which is saved to old_global_ip_file
-old_ext_ip = ""
-if not os.path.isfile(old_global_ip_file) :
-    log.info('Previous global IP file not existing')
-    # print "Previous global IP file not existing"
-    # os.system("touch %s" % old_global_ip_file)
 else :
-    try :
-        f_old = open(old_global_ip_file,"r")
-        old_ext_ip = f_old.readline()
-        f_old.close()
-        old_ext_ip = old_ext_ip.strip('\n')   # remove the line end
-        old_ext_ip = old_ext_ip.strip('\r')
-    except :
-        log.critical('File access error -> ipaddr.old')
-        # print "File access error -> ipaddr.old"
+    logMessages( "Internet IP : " + new_ext_ip )
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.connect(("yahoo.com",80))
+    localip_inet = s.getsockname()[0]
+    logMessages( "Local IP to internet : " + localip_inet )
+    s.close()
 
-# Get local IP address from previous data which is saved to old_local_ip_file
-oldlocalip = ""
-if not os.path.isfile(old_local_ip_file) :
-    log.info('Previous local IP file not existing')
-    # print "Previous local IP file not existing"
-    # os.system("touch %s" % old_local_ip_file)
-else :
-    try :
-        f_old = open(old_local_ip_file,"r")
-        oldlocalip = f_old.readline()
-        f_old.close()
-        oldlocalip = oldlocalip.strip('\n')   # remove the line end
-        oldlocalip = oldlocalip.strip('\r')
-    except :
-        log.critical('File access error -> ipaddr.old')
-        # print "File access error -> ipaddr.old"
-
-############################################################################
-# get local network ip address
-# add trusted domain if localip has been changed
-############################################################################
+# Get local IP address
 localip = getLocalNetworkIp()
+logMessages( localip )
 
-# It might have two ethernet cards with valid ip address
-# Make array for multiple ethernet cards
-localip = localip.split('\n')
+# Get local IP address from network settings
+cfg_json = getScuteConfigData()
+cfg_data = json.loads( cfg_json )
+scute_id = cfg_data['scuteid']
+logMessages( "Scute ID : " + scute_id )
+trusted_sites = cfg_data['trustedsites']
+logMessages( trusted_sites )
+# scute_port = cfg_data['port']
+if not scute_port:
+    scute_port = "14443"
+if not scute_id:
+    scute_id =  "SB-0001"
 
 # set update domain configure flag
 resetDomainConfig = False
 
-str = ""
+if not new_ext_ip in trusted_sites :
+    logMessages( new_ext_ip + " is not in trusted_sites" )
+    resetDomainConfig = True
+else :
+    logMessages( new_ext_ip + " is in trusted_sites already. :-)" )
+
 for ip in localip :
     if ip :
-        if not ip in oldlocalip :
+        if not ip in trusted_sites :
             # Add trust domain when internal or external ip change
+            logMessages( ip + " is not in trusted_sites" )
             resetDomainConfig = True
-            print "New local ip " + ip
         else :
-            print "Internal IP no change"
-
-        # make string for new ip address
-        str = str + ip + "  "
+            logMessages( ip + " is in trusted_sites already. :-)" )
     else :
-        print "Ignore empty IP string"
+        logMessages( "Ignore empty IP string" )
 
-# Save the local ips to file when it changes
+# Add new IPs to domain config file
 if resetDomainConfig :
-    f_old = open(old_local_ip_file, "w+")
-    f_old.write(str)
-    f_old.close()
-    print str
-
-if new_ext_ip != old_ext_ip :
-    # Add trust domain when internal or external ip change
-    resetDomainConfig = True
-
-    # reading scuteID and scutebox port forwarding from scutebox config file
-    str = GetScuteConfigData()
-    cfg_data = json.loads( str )
-    port = "14443"  # cfg_data['port']
-    scuteid = cfg_data['scuteid']
-    if not port:
-        port = "14443"
-        # log.info('There is no valid port number in config file')
-        # quit()
-    if not scuteid:
-        scuteid =  "SB-0001"
-        # log.info('There is no valid scuteid in config file')
-        # quit()
+    logMessages( "Clear Trusted Domains" )
+    str = "sudo -u apache /var/www/scute/occ cicer:domains --clear"
+    os.system( str )
+    if new_ext_ip :
+        logMessages( new_ext_ip + " is added to Trusted Domains" )
+        str = "sudo -u apache /var/www/scute/occ cicer:domains --add %s" % new_ext_ip
+        os.system( str )
+    for ip in localip :
+        if ip :
+            logMessages( ip + " is added to Trusted Domains" )
+            str = "sudo -u apache /var/www/scute/occ cicer:domains --add %s" % ip
+            os.system( str )
     #
-    # get local network ip address
-    # localip = getLocalNetworkIp()
-    #
+    # remove the upload successful flag to force update
+    cmd = '/bin/rm -rf ' + uploadGsGood
+    os.system( cmd )
+
+
+# Remove the old file if Internet is not connected
+if os.path.isfile( uploadGsGood ) :
+    logMessages( "Upload file exist" )
+    needUploadGs = False
+else :
+    logMessages( "***  Upload file not exist ***" )
+    needUploadGs = True
+
+
+if needUploadGs :
     # making URL for updating IP to global server
-    url_update = gs_url + '?ip=' + new_ext_ip + '&scuteid=' + scuteid + '&key=' + key + '&port=' + port + '&localip=' + localip[0]
-    # print url_update
-    res = urllib2.urlopen( url_update )
+    if not localip_inet:
+        # No internet connection, cannot update global server
+        logMessages('No internet connection, cannot update global server')
+        quit()
     #
+    logMessages( "Updating IP address to global server" )
+    #
+    url_update = '?ip=' + new_ext_ip + '&scuteid=' + scute_id + '&key=' + key + '&port=' + scute_port + '&localip=' + localip_inet
+    url_update = gs_url + url_update
+    res = urllib2.urlopen( url_update )
     str = res.read()
-    # print str
+    logMessages( str )
     res_data = json.loads( str )
     #
     # verify updating result
     if res_data['result'] == "true" :
-        # print "result: " + res_data['result']
-        # print "status: " + res_data['status']
-        cmd = 'echo ' + new_ext_ip + ' > ' + old_global_ip_file
+        cmd = '/bin/touch ' + uploadGsGood
         os.system( cmd )
-    	log.info( 'updated IP to global server successfully' )
+        logMessages( 'Updating IP to global server successfully' )
     else :
-    	log.error('failed to update IP to global server, ' + res_data['status'])
-else :
-    # log.info('IP Address no change')
-    print "External IP Address no change"
-
-# Add new IPs to domain config file
-if resetDomainConfig :
-    os.system("sudo -u apache /var/www/scute/occ cicer:domains --clear")
-    print "Clear domains"
-    if new_ext_ip :
-        os.system("sudo -u apache /var/www/scute/occ cicer:domains --add %s" % new_ext_ip)
-        print new_ext_ip
-    for ip in localip :
-        if ip :
-            os.system("sudo -u apache /var/www/scute/occ cicer:domains --add %s" % ip)
-            print ip
-    log.info('Added trust domain due to external ip change')
-
+        cmd = '/bin/rm -rf ' + uploadGsGood
+        os.system( cmd )
+        # os.remove(old_global_ip_file)
+        logMessages('Failed to update IP to global server, ' + res_data['status'])
