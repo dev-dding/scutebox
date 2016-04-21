@@ -18,14 +18,27 @@ scute_id = ""
 scute_port = ""
 trusted_sites = []
 
-def logMessages( str ):
-    log.info( str )
+# logging message and show it on console
+# the default logging level for root logger is INFO. using info as default here
+#
+def logMessages( str, level=logging.INFO ):
+    if level == logging.DEBUG:
+        log.debug( str )
+    elif level == logging.INFO:
+        log.info( str )
+    elif level == logging.WARNING:
+        log.warning( str )
+    elif level == logging.ERROR:
+        log.error( str )
+    elif level == logging.CRITICAL:
+        log.critical( str )
     print str
 
+# use ip addr command to get the ipaddresses, the return value is a list for multiple cards
+#
 def getLocalNetworkIp():
     # Get IP address from "ip addr" command
     str = '/usr/sbin/ip addr | grep \'state UP\' -A2 | grep inet | awk \'{print $2}\' | cut -f1 -d\'/\''
-    # str = 'cat ipaddr | grep \'state UP\' -A2 | grep inet | awk \'{print $2}\' | cut -f1 -d\'/\''
     p = subprocess.Popen(str, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
     str = p.stdout.read().splitlines()
     return str
@@ -40,6 +53,8 @@ def validateIp( ip ):
     except (AttributeError, TypeError):
         return False # `ip` isn't even a string
 
+# run config.php to output a json object, then parse the object in python to get scuteid and etc.
+#
 def getScuteConfigData():
     fo = open("/tmp/getscutecfg.php", "wb")
     fo.write("<?php\n")
@@ -61,6 +76,7 @@ def getScuteConfigData():
     ret = p.stdout.read()
     return ret
 
+
 # get the router internet ip address by running wget command
 def getGlobalIp():
     # os.system('wget -qO- http://ipecho.net/plain > ipaddr.txt')
@@ -72,12 +88,13 @@ def getGlobalIp():
 
 # prepare for logging messages to syslog
 log = logging.getLogger(__name__)
-log.setLevel(logging.DEBUG)
+log.setLevel(logging.WARNING)
 handler = logging.handlers.SysLogHandler(address = '/dev/log')
 formatter = logging.Formatter('%(module)s: %(message)s')
 handler.setFormatter(formatter)
 log.addHandler(handler)
-logMessages( "===============  UpdateIP.py Start ===============" )
+logMessages( "===============  updateip.py Start ===============" )
+
 
 # get and validate the router internet ip address
 new_ext_ip = getGlobalIp()
@@ -112,14 +129,18 @@ if not scute_id:
 # set update domain configure flag
 resetDomainConfig = False
 
-if not new_ext_ip in trusted_sites :
-    logMessages( new_ext_ip + " is not in trusted_sites" )
-    resetDomainConfig = True
-else :
-    logMessages( new_ext_ip + " is in trusted_sites already. :-)" )
+site_count = 0
+if new_ext_ip :
+    site_count = 1
+    if not new_ext_ip in trusted_sites :
+        logMessages( new_ext_ip + " is not in trusted_sites" )
+        resetDomainConfig = True
+    else :
+        logMessages( new_ext_ip + " is in trusted_sites already. :-)" )
 
 for ip in localip :
     if ip :
+        site_count += 1
         if not ip in trusted_sites :
             # Add trust domain when internal or external ip change
             logMessages( ip + " is not in trusted_sites" )
@@ -129,18 +150,21 @@ for ip in localip :
     else :
         logMessages( "Ignore empty IP string" )
 
+if site_count > 0 and site_count != len(trusted_sites) - 1 :
+    resetDomainConfig = True
+
 # Add new IPs to domain config file
 if resetDomainConfig :
-    logMessages( "Clear Trusted Domains" )
+    logMessages( "Clear Trusted Domains", level=logging.WARNING )
     str = "sudo -u apache /var/www/scute/occ cicer:domains --clear"
     os.system( str )
     if new_ext_ip :
-        logMessages( new_ext_ip + " is added to Trusted Domains" )
+        logMessages( new_ext_ip + " is added to Trusted Domains", level=logging.WARNING )
         str = "sudo -u apache /var/www/scute/occ cicer:domains --add %s" % new_ext_ip
         os.system( str )
     for ip in localip :
         if ip :
-            logMessages( ip + " is added to Trusted Domains" )
+            logMessages( ip + " is added to Trusted Domains", level=logging.WARNING )
             str = "sudo -u apache /var/www/scute/occ cicer:domains --add %s" % ip
             os.system( str )
     #
@@ -183,4 +207,4 @@ if needUploadGs :
         cmd = '/bin/rm -rf ' + uploadGsGood
         os.system( cmd )
         # os.remove(old_global_ip_file)
-        logMessages('Failed to update IP to global server, ' + res_data['status'])
+        logMessages('Failed to update IP to global server, ' + res_data['status'], level=logging.ERROR)
