@@ -271,7 +271,7 @@ int main ( int argc, char **argv )
                     int cmp1 = strcmp(scuteid, buffer);
                     int cmp2 = strcmp(DEBUG_SID, buffer);  // this is a backdoor for debugging
                     printf("got message: %s, from: %s, result: %d, %d\n", buffer,  (char *)inet_ntoa(from_addr.sin_addr), cmp1, cmp2);
-                    if ( (cmp1 == 0) || (cmp2 == 0) )
+                    if ( strlen(buffer) && ((cmp1 == 0) || (cmp2 == 0)) )
                     //if ( (cmp1 == 0) )
                     {
                         //sprintf( logmsg, "Received from client IP: %s, Port: %d, Data: %s",
