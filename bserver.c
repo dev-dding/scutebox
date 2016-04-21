@@ -98,9 +98,13 @@ void GetLocalIpAddress( char *ipaddr )
     char iface_name[20];
     
     ipaddr[0] = '\0';
-
+    
+    static int logflag = 0;
     if(getIfaceName(iface_name, sizeof(iface_name)) < 0) {
-    syslog( LOG_ERR, "get interface name error" );
+        if( logflag == 0 ){
+            logflag = 1; // set flag for logging once
+            syslog( LOG_ERR, "get interface name error" );
+        }
         //printf("get interface name error!\n");
         return;
     }
@@ -110,7 +114,8 @@ void GetLocalIpAddress( char *ipaddr )
         //printf("get interface ip address error!\n");
         return;
     }
-    
+
+    logflag = 0;  // clear the flag for next logging
     strcpy( ipaddr, (char *) &intaddr );
 }
 
